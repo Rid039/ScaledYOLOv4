@@ -1,7 +1,7 @@
 # train and val datasets (image directory or *.txt file with image paths)
-train: /content/drive/MyDrive/datasets/coco/lym_aug_train.txt  # 400 images
+train: /content/drive/MyDrive/datasets/coco/lym_aug_train.txt  # 350 images
 val: /content/drive/MyDrive/datasets/coco/lym_aug_val.txt  # 20 images
-test: /content/drive/MyDrive/datasets/coco/lym_aug_val.txt   
+test: /content/drive/MyDrive/datasets/coco/lym_aug_test.txt   # 10 images
 
 # number of classes
 nc: 80
