@@ -1233,7 +1233,7 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
                 color = color_lut[cls % len(color_lut)]
                 if names == "blank":
                   cls = ""
-                elif name:
+                elif names:
                   cls = names[cls]              
                 # cls = names[cls] if names else cls
                 if gt or conf[j] > 0.3:  # 0.3 conf thresh

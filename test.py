@@ -184,10 +184,10 @@ def test(data,
         # Plot images
         if batch_i < 1:
             f = Path(save_dir) / ('test_batch%g_gt.jpg' % batch_i)  # filename
-            plot_images(img, targets, paths, str(f), names="blank")
+            plot_images(img, targets, paths, str(f), names="blank")   # ground truth only bbox
             # plot_images(img, targets, paths, str(f), names)  # ground truth
             f = Path(save_dir) / ('test_batch%g_pred.jpg' % batch_i)
-            plot_images(img, output_to_target(output, width, height), paths, str(f), names="blank")
+            plot_images(img, output_to_target(output, width, height), paths, str(f), names="blank")   # predictions only bbox
             # plot_images(img, output_to_target(output, width, height), paths, str(f), names)  # predictions
 
     # Compute statistics
