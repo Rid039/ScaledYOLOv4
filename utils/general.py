@@ -1231,9 +1231,15 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
             for j, box in enumerate(boxes.T):
                 cls = int(classes[j])
                 color = color_lut[cls % len(color_lut)]
-                cls = names[cls] if names else cls
+                if names == "blank":
+                  cls = ""
+                elif name:
+                  cls = names[cls]              
+                # cls = names[cls] if names else cls
                 if gt or conf[j] > 0.3:  # 0.3 conf thresh
                     label = '%s' % cls if gt else '%s %.1f' % (cls, conf[j])
+                    if names == "blank":
+                      label = ""
                     plot_one_box(box, mosaic, label=label, color=color, line_thickness=tl)
 
         # Draw image filename labels
