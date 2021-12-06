@@ -5,6 +5,13 @@ import torch
 import torch.nn as nn
 
 from mish_cuda import MishCuda as Mish
+# try:
+#   from mish_cuda import MishCuda as Mish
+
+# except:
+#   class Mish(nn.Module):  # https://github.com/digantamisra98/Mish
+#     def forward(self, x):
+#       return MishFunction.apply(x)
 
 
 def autopad(k, p=None):  # kernel, padding
