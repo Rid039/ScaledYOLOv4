@@ -230,7 +230,7 @@ def train(hyp, opt, device, tb_writer=None):
         optimizer.zero_grad()
 
         # begin profiling ---------------
-        with torch.profiler.profile(schedule=torch.profiler.schedule(wait=1, warmup=nw, active=100, repeat=1, skip_first=1),
+        with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU,torch.profiler.ProfilerActivity.CUDA],
                     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/scaledyolov4'),
                     record_shapes=True,
                     with_stack=True
