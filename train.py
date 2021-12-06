@@ -13,6 +13,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 import yaml
 from torch.cuda import amp
+import torch.profiler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -227,6 +228,14 @@ def train(hyp, opt, device, tb_writer=None):
             print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
+
+        # begin profiling ---------------
+        prof = torch.profiler.profile(schedule=torch.profiler.schedule(wait=1, warmup=nw, active=ni-nw-1, repeat=1),
+                    on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/scaledyolov4'),
+                    record_shapes=True,
+                    with_stack=True)
+        prof.start()
+
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
@@ -290,8 +299,13 @@ def train(hyp, opt, device, tb_writer=None):
                     if tb_writer and result is not None:
                         tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
                         # tb_writer.add_graph(model, imgs)  # add model to tensorboard
-
+            
+            prof.step() # Need to call this at the end of each step to notify profiler of steps' boundary.
             # end batch ------------------------------------------------------------------------------------------------
+        
+
+        prof.stop()
+        # end profiling ---------------
 
         # Scheduler
         scheduler.step()
