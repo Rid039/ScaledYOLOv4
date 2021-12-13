@@ -228,14 +228,13 @@ def train(hyp, opt, device, tb_writer=None):
             print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
-
-        # begin profiling ---------------
+        
+        # begin profiling ------------------------------------------------------------------------------------------------
+        # ,record_shapes=True, with_stack=True
         with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU,torch.profiler.ProfilerActivity.CUDA],
                     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/scaledyolov4'),
-                    record_shapes=True,
-                    with_stack=True
+                    profile_memory=True
                     ) as prof:
-        # prof.start()
 
           for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
               ni = i + nb * epoch  # number integrated batches (since train start)
@@ -303,10 +302,7 @@ def train(hyp, opt, device, tb_writer=None):
               
               prof.step() # Need to call this at the end of each step to notify profiler of steps' boundary.
               # end batch ------------------------------------------------------------------------------------------------
-          
-
-        # prof.stop()
-        # end profiling ---------------
+        # end profiling --------------------------------------------------------------------------------------------------
 
         # Scheduler
         scheduler.step()
