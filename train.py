@@ -230,10 +230,10 @@ def train(hyp, opt, device, tb_writer=None):
         optimizer.zero_grad()
         
         # begin profiling ------------------------------------------------------------------------------------------------
-        # ,record_shapes=True, with_stack=True
+        # ,profile_memory=True, record_shapes=True, with_stack=True
         with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU,torch.profiler.ProfilerActivity.CUDA],
                     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/scaledyolov4'),
-                    profile_memory=True
+                    record_shapes=True, with_stack=True
                     ) as prof:
 
           for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
