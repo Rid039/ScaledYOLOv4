@@ -1,0 +1,10 @@
+# train and val datasets (image directory or *.txt file with image paths)
+train: /content/drive/MyDrive/CB/cb_759/img_norm_mk_aug/train.txt     # 3186 images
+val: /content/drive/MyDrive/CB/cb_759/img_norm_mk_aug/val.txt         # 114 images
+test: /content/drive/MyDrive/CB/cb_759/img_norm_mk_aug/test.txt       # 114 images
+
+# number of classes
+nc: 1
+
+# class names
+names: ['centroblast']
