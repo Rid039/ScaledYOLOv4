@@ -13,6 +13,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 import yaml
 from torch.cuda import amp
+import torch.profiler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -227,71 +228,81 @@ def train(hyp, opt, device, tb_writer=None):
             print(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
-        for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-            ni = i + nb * epoch  # number integrated batches (since train start)
-            imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
+        
+        # begin profiling ------------------------------------------------------------------------------------------------
+        # ,profile_memory=True, record_shapes=True, with_stack=True
+        with torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU,torch.profiler.ProfilerActivity.CUDA],
+                    on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/scaledyolov4'),
+                    record_shapes=True, with_stack=True
+                    ) as prof:
 
-            # Warmup
-            if ni <= nw:
-                xi = [0, nw]  # x interp
-                # model.gr = np.interp(ni, xi, [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
-                accumulate = max(1, np.interp(ni, xi, [1, nbs / total_batch_size]).round())
-                for j, x in enumerate(optimizer.param_groups):
-                    # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                    x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
-                    if 'momentum' in x:
-                        x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
+          for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+              ni = i + nb * epoch  # number integrated batches (since train start)
+              imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
-            # Multi-scale
-            if opt.multi_scale:
-                sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
-                sf = sz / max(imgs.shape[2:])  # scale factor
-                if sf != 1:
-                    ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
-                    imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
+              # Warmup
+              if ni <= nw:
+                  xi = [0, nw]  # x interp
+                  # model.gr = np.interp(ni, xi, [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
+                  accumulate = max(1, np.interp(ni, xi, [1, nbs / total_batch_size]).round())
+                  for j, x in enumerate(optimizer.param_groups):
+                      # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                      x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+                      if 'momentum' in x:
+                          x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
 
-            # Autocast
-            with amp.autocast(enabled=cuda):
-                # Forward                
-                pred = model(imgs)
-                #pred = model(imgs.to(memory_format=torch.channels_last))
+              # Multi-scale
+              if opt.multi_scale:
+                  sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
+                  sf = sz / max(imgs.shape[2:])  # scale factor
+                  if sf != 1:
+                      ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
+                      imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
-                # Loss
-                loss, loss_items = compute_loss(pred, targets.to(device), model)  # scaled by batch_size
-                if rank != -1:
-                    loss *= opt.world_size  # gradient averaged between devices in DDP mode
-                # if not torch.isfinite(loss):
-                #     print('WARNING: non-finite loss, ending training ', loss_items)
-                #     return results
+              # Autocast
+              with amp.autocast(enabled=cuda):
+                  # Forward                
+                  pred = model(imgs)
+                  #pred = model(imgs.to(memory_format=torch.channels_last))
 
-            # Backward
-            scaler.scale(loss).backward()
+                  # Loss
+                  loss, loss_items = compute_loss(pred, targets.to(device), model)  # scaled by batch_size
+                  if rank != -1:
+                      loss *= opt.world_size  # gradient averaged between devices in DDP mode
+                  # if not torch.isfinite(loss):
+                  #     print('WARNING: non-finite loss, ending training ', loss_items)
+                  #     return results
 
-            # Optimize
-            if ni % accumulate == 0:
-                scaler.step(optimizer)  # optimizer.step
-                scaler.update()
-                optimizer.zero_grad()
-                if ema is not None:
-                    ema.update(model)
+              # Backward
+              scaler.scale(loss).backward()
 
-            # Print
-            if rank in [-1, 0]:
-                mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
-                mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
-                s = ('%10s' * 2 + '%10.4g' * 6) % (
-                    '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
-                pbar.set_description(s)
+              # Optimize
+              if ni % accumulate == 0:
+                  scaler.step(optimizer)  # optimizer.step
+                  scaler.update()
+                  optimizer.zero_grad()
+                  if ema is not None:
+                      ema.update(model)
 
-                # Plot
-                if ni < 3:
-                    f = str(log_dir / ('train_batch%g.jpg' % ni))  # filename
-                    result = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
-                    if tb_writer and result is not None:
-                        tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
-                        # tb_writer.add_graph(model, imgs)  # add model to tensorboard
+              # Print
+              if rank in [-1, 0]:
+                  mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
+                  mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
+                  s = ('%10s' * 2 + '%10.4g' * 6) % (
+                      '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
+                  pbar.set_description(s)
 
-            # end batch ------------------------------------------------------------------------------------------------
+                  # Plot
+                  if ni < 3:
+                      f = str(log_dir / ('train_batch%g.jpg' % ni))  # filename
+                      result = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
+                      if tb_writer and result is not None:
+                          tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
+                          # tb_writer.add_graph(model, imgs)  # add model to tensorboard
+              
+              prof.step() # Need to call this at the end of each step to notify profiler of steps' boundary.
+              # end batch ------------------------------------------------------------------------------------------------
+        # end profiling --------------------------------------------------------------------------------------------------
 
         # Scheduler
         scheduler.step()
