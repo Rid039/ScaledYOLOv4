@@ -24,6 +24,8 @@ from tqdm import tqdm
 
 from utils.torch_utils import init_seeds, is_parallel
 
+from loguru import logger
+
 # Set printoptions
 torch.set_printoptions(linewidth=320, precision=5, profile='long')
 np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})  # format short g, %precision=5
@@ -251,6 +253,8 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
             # Accumulate FPs and TPs
             fpc = (1 - tp[i]).cumsum(0)
             tpc = tp[i].cumsum(0)
+            # logger.info(f'FPs = {fpc[-1]} \n TPs = {tpc[-1]}')
+            # logger.info(f'n_gt = {n_gt}')
 
             # Recall
             recall = tpc / (n_gt + 1e-16)  # recall curve

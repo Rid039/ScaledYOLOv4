@@ -17,6 +17,7 @@ from utils.general import (
     scale_coords, xyxy2xywh, clip_coords, plot_images, xywh2xyxy, box_iou, output_to_target, ap_per_class)
 from utils.torch_utils import select_device, time_synchronized
 
+from loguru import logger
 
 def test(data,
          weights=None,
@@ -26,6 +27,7 @@ def test(data,
          iou_thres=0.6,  # for NMS
          save_json=False,
          single_cls=False,
+         classes=None,
          augment=False,
          verbose=False,
          model=None,
@@ -46,6 +48,11 @@ def test(data,
             if os.path.exists(out):
                 shutil.rmtree(out)  # delete output folder
             os.makedirs(out)  # make new output folder
+
+            out_fp = Path('inference/output_fp')
+            if os.path.exists(out_fp):
+                shutil.rmtree(out_fp)  # delete output folder
+            os.makedirs(out_fp)  # make new output folder
 
         # Remove previous
         for f in glob.glob(str(Path(save_dir) / 'test_batch*.jpg')):
@@ -106,7 +113,7 @@ def test(data,
 
             # Run NMS
             t = time_synchronized()
-            output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, merge=merge)
+            output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, classes=classes, merge=merge)
             t1 += time_synchronized() - t
 
         # Statistics per image
@@ -125,8 +132,9 @@ def test(data,
             if save_txt:
                 gn = torch.tensor(shapes[si][0])[[1, 0, 1, 0]]  # normalization gain whwh
                 txt_path = str(out / Path(paths[si]).stem)
-                pred[:, :4] = scale_coords(img[si].shape[1:], pred[:, :4], shapes[si][0], shapes[si][1])  # to original
-                for *xyxy, conf, cls in pred:
+                box = pred.clone()
+                box[:, :4] = scale_coords(img[si].shape[1:], box[:, :4], shapes[si][0], shapes[si][1])  # to original
+                for *xyxy, conf, cls in box:
                     xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                     with open(txt_path + '.txt', 'a') as f:
                         f.write(('%g ' * 5 + '\n') % (cls, *xywh))  # label format
@@ -181,6 +189,21 @@ def test(data,
             # Append statistics (correct, conf, pcls, tcls)
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
+            # Append to text file with change class id
+            if save_txt:
+                gn = torch.tensor(shapes[si][0])[[1, 0, 1, 0]]  # normalization gain whwh
+                txt_path_pf = str(out_fp / Path(paths[si]).stem)
+                box = pred.clone()
+                box[:, :4] = scale_coords(img[si].shape[1:], box[:, :4], shapes[si][0], shapes[si][1])  # to original
+                for i in range(box.shape[0]):
+                    *xyxy, conf, cls = box[i]
+                    # change class id
+                    if not correct[i][0]:
+                        cls = 1
+                    xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                    with open(txt_path_pf + '.txt', 'a') as f:
+                        f.write(('%g ' * 5 + '\n') % (cls, *xywh))  # label format
+                        
         # Plot images
         if batch_i < 1:
             f = Path(save_dir) / ('test_batch%g_gt.jpg' % batch_i)  # filename
@@ -258,6 +281,7 @@ if __name__ == '__main__':
     parser.add_argument('--task', default='val', help="'val', 'test', 'study'")
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--single-cls', action='store_true', help='treat as single-class dataset')
+    parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--merge', action='store_true', help='use Merge NMS')
     parser.add_argument('--verbose', action='store_true', help='report mAP by class')
@@ -276,6 +300,7 @@ if __name__ == '__main__':
              opt.iou_thres,
              opt.save_json,
              opt.single_cls,
+             opt.classes,
              opt.augment,
              opt.verbose)
 

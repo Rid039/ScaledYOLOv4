@@ -1,0 +1,11 @@
+# train and val datasets (image directory or *.txt file with image paths)
+train: ./datasets/YOLO/cb_1203_mk_aug/train.txt       # 5058 images
+val: ./datasets/YOLO/cb_1203_mk_aug/val.txt           # 180 images
+test: ./datasets/YOLO/cb_1203_mk_aug/test.txt         # 180 images
+# test: ./datasets/original_datasets/cb_1203/temp/test.txt
+
+# number of classes
+nc: 1
+
+# class names
+names: ['centroblast']
