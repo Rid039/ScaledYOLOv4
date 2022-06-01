@@ -253,8 +253,20 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
             # Accumulate FPs and TPs
             fpc = (1 - tp[i]).cumsum(0)
             tpc = tp[i].cumsum(0)
-            # logger.info(f'FPs = {fpc[-1]} \n TPs = {tpc[-1]}')
-            # logger.info(f'n_gt = {n_gt}')
+            logger.info(f'tp.shape = {tp.shape}')
+            logger.info(f'conf[i].shape = {conf[i].shape}')
+            logger.info(f'conf[i] = {conf[i]} \n')
+            
+            logger.info(f'conf[-1] = {conf[-1]}')
+            logger.info(f'FPs  = {fpc[-1]}')
+            logger.info(f'TPs = {tpc[-1]}')
+            logger.info(f'n_gt = {n_gt} \n')
+
+            logger.info(f'@conf = {pr_score}, and iou = 0.5')
+            logger.info(f'FPs  = {np.interp(-pr_score, -conf[i], fpc[:, 0])}')
+            logger.info(f'TPs = {np.interp(-pr_score, -conf[i], tpc[:, 0])}')
+            logger.info(f'n_gt = {n_gt} \n')
+
 
             # Recall
             recall = tpc / (n_gt + 1e-16)  # recall curve

@@ -1,0 +1,11 @@
+# train and val datasets (image directory or *.txt file with image paths)
+train: 
+val: 
+test: ./datasets/original_datasets/cb_1203/temp/mk_1203/test.txt # 1203 images
+# test: ./datasets/original_datasets/cb_1203/temp/ori_1203/test.txt # 1203 images
+
+# number of classes
+nc: 1
+
+# class names
+names: ['centroblast']

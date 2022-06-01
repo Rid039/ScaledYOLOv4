@@ -206,6 +206,7 @@ def test(data,
                         
         # Plot images
         if batch_i < 1:
+            # logger.info(f'paths = {paths}')
             f = Path(save_dir) / ('test_batch%g_gt.jpg' % batch_i)  # filename
             plot_images(img, targets, paths, str(f), names="blank")   # ground truth only bbox
             # plot_images(img, targets, paths, str(f), names)  # ground truth
